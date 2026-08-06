@@ -51,37 +51,6 @@ dnf5 versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel
     /tmp/rpms/{extra,kmods-extra}/*sc0710*.rpm \
     /tmp/rpms/{extra,kmods-extra}/*system76*.rpm
 
-
-# Dynamically gather variables for exact targeting
-ARCH="$(rpm -E '%_arch')"
-KERNEL="$(rpm -q "${KERNEL_NAME:-kernel}" --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}')"
-RELEASE="$(rpm -E '%fedora')"
-												   
-COPR_RELEASE="${RELEASE}"
-
-# Corrected COPR download endpoint
-curl -LsSf -o /etc/yum.repos.d/_copr_dpratt-aorus-laptop.repo \
-    "https://copr.fedorainfracloud.org/coprs/dpratt/aorus-laptop/repo/fedora-${COPR_RELEASE}/dpratt-aorus-laptop-fedora-${COPR_RELEASE}.repo"
-
-### BUILD aorus-laptop (succeed or fail-fast with debug output)
-dnf5 install -y --setopt=tsflags=noscripts \
-    "akmod-aorus-laptop-*.fc${RELEASE}.${ARCH}"
-
-# Fix: Force akmods to skip its internal runuser sandbox session management 
-# by using the pre-extracted src.rpm directly as the root/akmods user.
-akmodsbuild --kernels "${KERNEL}" /usr/src/akmods/aorus-laptop-kmod-*.src.rpm
-
-# Explicitly trigger the tracking driver alignment
-akmods --force --kernels "${KERNEL}" --kmod aorus-laptop || true
-
-# Ensure compilation was successful and module binary exists
-modinfo "/usr/lib/modules/${KERNEL}/extra/aorus-laptop/aorus-laptop.ko.xz" >/dev/null || \
-    modinfo "/usr/lib/modules/${KERNEL}/extra/aorus-laptop/aorus-laptop.ko" >/dev/null || \
-    (find /var/cache/akmods/aorus-laptop/ -name \*.log -print -exec cat {} \; && exit 1)
-
-# Clean up build repo configuration before finalizing layer
-rm -f /etc/yum.repos.d/_copr_dpratt-aorus-laptop.repo
-
 pushd /usr/lib/kernel/install.d
 mv -f 05-rpmostree.install.bak 05-rpmostree.install
 mv -f 50-dracut.install.bak 50-dracut.install
