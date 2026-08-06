@@ -61,10 +61,10 @@ RELEASE="$(rpm -E '%fedora')"
 COPR_RELEASE="${RELEASE}"
 
 curl -LsSf -o /etc/yum.repos.d/_copr_dpratt-aorus-laptop.repo \
-    "https://fedorainfracloud.org{COPR_RELEASE}/dpratt-aorus-laptop-fedora-${COPR_RELEASE}.repo"
+    "https://copr.fedorainfracloud.org/coprs/dpratt/aorus-laptop/repo/fedora-${COPR_RELEASE}/dpratt-aorus-laptop-fedora-${COPR_RELEASE}.repo"
 
 ### BUILD aorus-laptop (succeed or fail-fast with debug output)
-# Fix: Disable scriptlets to prevent the automated root akmod compilation failure
+																				 
 dnf5 install -y --setopt=tsflags=noscripts \
     "akmod-aorus-laptop-*.fc${RELEASE}.${ARCH}"
 
