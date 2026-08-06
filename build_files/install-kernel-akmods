@@ -51,6 +51,12 @@ dnf5 versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel
     /tmp/rpms/{extra,kmods-extra}/*sc0710*.rpm \
     /tmp/rpms/{extra,kmods-extra}/*system76*.rpm
 
+# Fetch dpratt/aorus-laptop COPR repository and build the akmod module
+curl -Lo /etc/yum.repos.d/_copr_dpratt-aorus-laptop.repo \
+    https://fedorainfracloud.org
+
+dnf5 -y install akmod-aorus-laptop
+
 pushd /usr/lib/kernel/install.d
 mv -f 05-rpmostree.install.bak 05-rpmostree.install
 mv -f 50-dracut.install.bak 50-dracut.install
