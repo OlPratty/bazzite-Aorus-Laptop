@@ -58,16 +58,16 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - bazzite
-          - bazzite-gnome
-          - bazzite-deck
-          - bazzite-deck-gnome
-          - bazzite-deck-nvidia
-          - bazzite-deck-nvidia-gnome
-          - bazzite-nvidia
-          - bazzite-gnome-nvidia
+#exclude: - bazzite
+#exclude: - bazzite-gnome
+#exclude: - bazzite-deck
+#exclude: - bazzite-deck-gnome
+#exclude: - bazzite-deck-nvidia
+#exclude: - bazzite-deck-nvidia-gnome
+#exclude: - bazzite-nvidia
+#exclude: - bazzite-gnome-nvidia
           - bazzite-nvidia-open
-          - bazzite-gnome-nvidia-open
+#exclude: - bazzite-gnome-nvidia-open
         include:
           - fedora_version: 44
             kernel_flavor: ogc
