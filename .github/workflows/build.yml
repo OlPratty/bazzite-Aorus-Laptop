@@ -183,6 +183,106 @@ jobs:
       - name: Check just syntax
         uses: ublue-os/just-action@v3
 
+      - name: Ensure matching custom akmods exist
+        if: matrix.kernel_flavor == 'ogc'
+        env:
+          GH_TOKEN: ${{ secrets.AKMODS_DISPATCH_TOKEN }}
+          AKMODS_REPO: OlPratty/akmods
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          AKMODS_TAG="${{ steps.base.outputs.akmods_tag }}"
+          KERNEL_VERSION="${{ matrix.kernel_version }}"
+          REGISTRY="ghcr.io/olpratty"
+
+          echo "Required kernel: ${KERNEL_VERSION}"
+          echo "Required akmods tag: ${AKMODS_TAG}"
+
+          REQUIRED_IMAGES=(
+            "${REGISTRY}/akmods:${AKMODS_TAG}"
+            "${REGISTRY}/akmods-extra:${AKMODS_TAG}"
+          )
+
+          if [ "${{ steps.base.outputs.install_nvidia }}" == "true" ]; then
+            NVIDIA_FLAVOR="${{ steps.base.outputs.nvidia_flavor }}"
+            REQUIRED_IMAGES+=(
+              "${REGISTRY}/akmods-${NVIDIA_FLAVOR}:${AKMODS_TAG}"
+            )
+          fi
+
+          MISSING=false
+
+          for IMAGE in "${REQUIRED_IMAGES[@]}"; do
+            echo "Checking ${IMAGE}"
+            if skopeo inspect "docker://${IMAGE}" >/dev/null 2>&1; then
+              echo "Found: ${IMAGE}"
+            else
+              echo "Missing: ${IMAGE}"
+              MISSING=true
+            fi
+          done
+
+          if [ "${MISSING}" == "false" ]; then
+            echo "All required custom akmods images already exist."
+            exit 0
+          fi
+
+          echo "One or more required images are missing."
+          echo "Triggering exact OGC akmods build for ${KERNEL_VERSION}"
+
+          DISPATCH_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          gh workflow run build-akmods-ogc.yml \
+            --repo "${AKMODS_REPO}" \
+            --ref main \
+            -f "ogc_kernel_version=${KERNEL_VERSION}"
+
+          echo "Waiting for dispatched akmods workflow to appear..."
+
+          RUN_ID=""
+
+          for attempt in {1..60}; do
+            RUN_ID="$(
+              gh run list \
+                --repo "${AKMODS_REPO}" \
+                --workflow build-akmods-ogc.yml \
+                --branch main \
+                --event workflow_dispatch \
+                --created ">=${DISPATCH_TIME}" \
+                --limit 5 \
+                --json databaseId,createdAt \
+                --jq '.[0].databaseId // empty'
+            )"
+
+            if [ -n "${RUN_ID}" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ -z "${RUN_ID}" ]; then
+            echo "Unable to find the dispatched akmods workflow run." >&2
+            exit 1
+          fi
+
+          echo "Following akmods workflow run ${RUN_ID}"
+          gh run watch "${RUN_ID}" \
+            --repo "${AKMODS_REPO}" \
+            --exit-status
+
+          echo "Akmods workflow completed successfully."
+
+          echo "Verifying required images after build..."
+
+          for IMAGE in "${REQUIRED_IMAGES[@]}"; do
+            echo "Checking ${IMAGE}"
+            skopeo inspect "docker://${IMAGE}" >/dev/null
+            echo "Found: ${IMAGE}"
+          done
+
+
       - name: Pull Images and find versions
         id: labels
         env:
@@ -227,12 +327,12 @@ jobs:
           # Kernel & akmods
           #
           AKMODS_TAG="${{ steps.base.outputs.akmods_tag }}"
-          sudo podman pull ghcr.io/ublue-os/akmods:${AKMODS_TAG}
-          # sudo podman pull ghcr.io/ublue-os/akmods-extra:${AKMODS_TAG}
+          sudo podman pull ghcr.io/olpratty/akmods:${AKMODS_TAG}
+          sudo podman pull ghcr.io/olpratty/akmods-extra:${AKMODS_TAG}
 
           if [ "${{ steps.base.outputs.install_nvidia }}" == "true" ]; then
             NVIDIA_FLAVOR="${{ steps.base.outputs.nvidia_flavor }}"
-            sudo podman pull "ghcr.io/ublue-os/akmods-${NVIDIA_FLAVOR}:${AKMODS_TAG}"
+            sudo podman pull "ghcr.io/olpratty/akmods-${NVIDIA_FLAVOR}:${AKMODS_TAG}"
           fi
 
 
