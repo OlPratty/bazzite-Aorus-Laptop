@@ -8,9 +8,9 @@ from typing import Any
 import re
 from collections import defaultdict
 
-REGISTRY = "ghcr.io/ublue-os/"
+REGISTRY = os.environ.get("BAZZITE_REGISTRY", "ghcr.io/ublue-os/")
 
-IMAGES = [
+DEFAULT_IMAGES = [
     "bazzite",
     "bazzite-gnome",
     "bazzite-deck",
@@ -22,6 +22,8 @@ IMAGES = [
     "bazzite-nvidia-open",
     "bazzite-gnome-nvidia-open",
 ]
+
+IMAGES = os.environ.get("BAZZITE_IMAGES", ",".join(DEFAULT_IMAGES)).split(",")
 
 RETRIES = 3
 RETRY_WAIT = 5
@@ -47,7 +49,9 @@ OTHER_NAMES = {
 COMMITS_FORMAT = (
     "### Commits\n| Hash | Subject | Author |\n| --- | --- | --- |{commits}\n\n"
 )
-COMMIT_FORMAT = "\n| **[{short}](https://github.com/ublue-os/bazzite/commit/{hash})** | {subject} | {author} |"
+GITHUB_REPOSITORY = os.environ.get("BAZZITE_GITHUB_REPOSITORY", "ublue-os/bazzite")
+
+COMMIT_FORMAT = f"\n| **[{{short}}](https://github.com/{GITHUB_REPOSITORY}/commit/{{hash}})** | {{subject}} | {{author}} |"
 
 CHANGELOG_TITLE = "{tag}: {pretty}"
 CHANGELOG_FORMAT = """\
@@ -245,7 +249,13 @@ def get_tags(target: str, manifests: dict[str, Any]):
                 tags.remove(tag)
 
     tags = list(sorted(tags))
-    assert len(tags) > 2, "No current and previous tags found"
+
+    if not tags:
+        raise RuntimeError("No release tags found")
+
+    if len(tags) == 1:
+        return None, tags[0]
+
     return tags[-2], tags[-1]
 
 
@@ -532,17 +542,26 @@ def main():
     print(f"Previous tag: {prev}")
     print(f" Current tag: {curr}")
 
-    prev_manifests = get_manifests(prev)
-    title, changelog = generate_changelog(
-        args.handwritten,
-        target,
-        args.pretty,
-        args.workdir,
-        prev,
-        curr,
-        prev_manifests,
-        manifests,
-    )
+    if prev is None:
+        pretty = args.pretty or f"{target.capitalize()} (First Release)"
+        title = CHANGELOG_TITLE.format(tag=curr, pretty=pretty)
+
+        if args.handwritten:
+            changelog = args.handwritten
+        else:
+            changelog = "Initial release of this image in this repository.\n"
+    else:
+        prev_manifests = get_manifests(prev)
+        title, changelog = generate_changelog(
+            args.handwritten,
+            target,
+            args.pretty,
+            args.workdir,
+            prev,
+            curr,
+            prev_manifests,
+            manifests,
+        )
 
     print(f"Changelog:\n# {title}\n{changelog}")
     print(f'\nOutput:\nTITLE="{title}"\nTAG={curr}')
