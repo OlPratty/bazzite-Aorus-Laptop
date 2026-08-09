@@ -3,3 +3,5 @@ _build_*
 output
 _build-*/**
 *_chunkah_*
+__pycache__/
+*.pyc
