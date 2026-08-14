@@ -38,7 +38,7 @@ jobs:
         env:
           BAZZITE_REGISTRY: ghcr.io/olpratty/
           BAZZITE_IMAGES: bazzite-nvidia-open
-          BAZZITE_GITHUB_REPOSITORY: OlPratty/bazzite-Aorus-Laptop
+          BAZZITE_GITHUB_REPOSITORY: olpratty/bazzite-Aorus-Laptop
         run: |
           python3 ./.github/workflows/changelog.py \
             "${{ steps.get-target.outputs.target }}" \
