@@ -183,69 +183,46 @@ jobs:
       - name: Check just syntax
         uses: ublue-os/just-action@v3
 
-      - name: Ensure matching custom akmods exist
+      - name: Ensure matching AORUS kmods exist
         if: matrix.kernel_flavor == 'ogc'
         env:
           GH_TOKEN: ${{ secrets.AKMODS_DISPATCH_TOKEN }}
-          AKMODS_REPO: olpratty/akmods
+          AORUS_KMODS_REPO: olpratty/aorus-kmods
         shell: bash
         run: |
           set -euo pipefail
 
           AKMODS_TAG="${{ steps.base.outputs.akmods_tag }}"
           KERNEL_VERSION="${{ matrix.kernel_version }}"
-          REGISTRY="ghcr.io/olpratty"
+          IMAGE="ghcr.io/olpratty/aorus-kmods:${AKMODS_TAG}"
 
           echo "Required kernel: ${KERNEL_VERSION}"
-          echo "Required akmods tag: ${AKMODS_TAG}"
+          echo "Required AORUS kmods tag: ${AKMODS_TAG}"
+          echo "Checking ${IMAGE}"
 
-          REQUIRED_IMAGES=(
-            "${REGISTRY}/akmods:${AKMODS_TAG}"
-            "${REGISTRY}/akmods-extra:${AKMODS_TAG}"
-          )
-
-          if [ "${{ steps.base.outputs.install_nvidia }}" == "true" ]; then
-            NVIDIA_FLAVOR="${{ steps.base.outputs.nvidia_flavor }}"
-            REQUIRED_IMAGES+=(
-              "${REGISTRY}/akmods-${NVIDIA_FLAVOR}:${AKMODS_TAG}"
-            )
-          fi
-
-          MISSING=false
-
-          for IMAGE in "${REQUIRED_IMAGES[@]}"; do
-            echo "Checking ${IMAGE}"
-            if skopeo inspect "docker://${IMAGE}" >/dev/null 2>&1; then
-              echo "Found: ${IMAGE}"
-            else
-              echo "Missing: ${IMAGE}"
-              MISSING=true
-            fi
-          done
-
-          if [ "${MISSING}" == "false" ]; then
-            echo "All required custom akmods images already exist."
+          if skopeo inspect "docker://${IMAGE}" >/dev/null 2>&1; then
+            echo "Found: ${IMAGE}"
             exit 0
           fi
 
-          echo "One or more required images are missing."
-          echo "Triggering exact OGC akmods build for ${KERNEL_VERSION}"
+          echo "Missing: ${IMAGE}"
+          echo "Triggering exact AORUS OGC kmod build for ${KERNEL_VERSION}"
 
           DISPATCH_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
           gh workflow run build-akmods-ogc.yml \
-            --repo "${AKMODS_REPO}" \
+            --repo "${AORUS_KMODS_REPO}" \
             --ref main \
             -f "ogc_kernel_version=${KERNEL_VERSION}"
 
-          echo "Waiting for dispatched akmods workflow to appear..."
+          echo "Waiting for dispatched AORUS kmods workflow to appear..."
 
           RUN_ID=""
 
           for attempt in {1..60}; do
             RUN_ID="$(
               gh run list \
-                --repo "${AKMODS_REPO}" \
+                --repo "${AORUS_KMODS_REPO}" \
                 --workflow build-akmods-ogc.yml \
                 --branch main \
                 --event workflow_dispatch \
@@ -263,25 +240,22 @@ jobs:
           done
 
           if [ -z "${RUN_ID}" ]; then
-            echo "Unable to find the dispatched akmods workflow run." >&2
+            echo "Unable to find the dispatched AORUS kmods workflow run." >&2
             exit 1
           fi
 
-          echo "Following akmods workflow run ${RUN_ID}"
+          echo "Following AORUS kmods workflow run ${RUN_ID}"
+
           gh run watch "${RUN_ID}" \
-            --repo "${AKMODS_REPO}" \
+            --repo "${AORUS_KMODS_REPO}" \
             --exit-status
 
-          echo "Akmods workflow completed successfully."
+          echo "AORUS kmods workflow completed successfully."
+          echo "Verifying ${IMAGE}"
 
-          echo "Verifying required images after build..."
+          skopeo inspect "docker://${IMAGE}" >/dev/null
 
-          for IMAGE in "${REQUIRED_IMAGES[@]}"; do
-            echo "Checking ${IMAGE}"
-            skopeo inspect "docker://${IMAGE}" >/dev/null
-            echo "Found: ${IMAGE}"
-          done
-
+          echo "Found: ${IMAGE}"
 
       - name: Pull Images and find versions
         id: labels
@@ -327,14 +301,14 @@ jobs:
           # Kernel & akmods
           #
           AKMODS_TAG="${{ steps.base.outputs.akmods_tag }}"
-          sudo podman pull ghcr.io/olpratty/akmods:${AKMODS_TAG}
-          sudo podman pull ghcr.io/olpratty/akmods-extra:${AKMODS_TAG}
+          sudo podman pull ghcr.io/ublue-os/akmods:${AKMODS_TAG}
+          sudo podman pull ghcr.io/ublue-os/akmods-extra:${AKMODS_TAG}
+          sudo podman pull ghcr.io/olpratty/aorus-kmods:${AKMODS_TAG}
 
           if [ "${{ steps.base.outputs.install_nvidia }}" == "true" ]; then
             NVIDIA_FLAVOR="${{ steps.base.outputs.nvidia_flavor }}"
-            sudo podman pull "ghcr.io/olpratty/akmods-${NVIDIA_FLAVOR}:${AKMODS_TAG}"
+            sudo podman pull "ghcr.io/ublue-os/akmods-${NVIDIA_FLAVOR}:${AKMODS_TAG}"
           fi
-
 
           echo "Generated the following:"
           cat $GITHUB_OUTPUT
