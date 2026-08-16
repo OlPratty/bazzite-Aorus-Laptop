@@ -58,6 +58,9 @@ ARG FEDORA_VERSION="${FEDORA_VERSION:-44}"
 ARG SHA_HEAD_SHORT="${SHA_HEAD_SHORT}"
 ARG VERSION_TAG="${VERSION_TAG}"
 ARG VERSION_PRETTY="${VERSION_PRETTY}"
+ARG AORUS_CC_PLUGIN_VERSION="0.1.0"
+ARG AORUS_CC_PLUGIN_SHA256="a9dc03c7a16a5b8ef43f44f8867889ef00ae97dd407447738560f25c5010c388"
+ARG AORUS_CC_PLUGIN_MANIFEST_SHA256="520d14dc5b7ae9b9ce491b007eb4b6e91956a066372fd54bc6a0479c19bf457b"
 
 COPY system_files/desktop/shared/ system_files/desktop/${BASE_IMAGE_NAME}/ /
 RUN find /usr/share/ublue-os/docs -type f -exec setfattr -n user.component -v "ublue-docs" {} +
@@ -107,7 +110,8 @@ RUN --mount=type=cache,dst=/var/cache \
         ublue-os/staging \
         ublue-os/packages \
         ycollet/audinux \
-        che/nerd-fonts; \
+        che/nerd-fonts \
+        codifryed/CoolerControl; \
     do \
         echo "Enabling copr: $copr"; \
         dnf5 -y copr enable $copr; \
@@ -288,7 +292,31 @@ RUN --mount=type=cache,dst=/var/cache \
         gmodpatchtool \
         bazzite-portal \
         kernel-tools \
-        ls-iommu && \
+        ls-iommu \
+        coolercontrol \
+        coolercontrold \
+        liquidctl && \
+    mkdir -p /tmp/aorus-plugin && \
+    /ctx/ghcurl \
+        "https://github.com/olpratty/aorus-coolercontrol-plugin/releases/download/v${AORUS_CC_PLUGIN_VERSION}/cc-plugin-aorus" \
+        -Lo /tmp/aorus-plugin/cc-plugin-aorus && \
+    /ctx/ghcurl \
+        "https://github.com/olpratty/aorus-coolercontrol-plugin/releases/download/v${AORUS_CC_PLUGIN_VERSION}/manifest.toml" \
+        -Lo /tmp/aorus-plugin/manifest.toml && \
+    printf '%s  %s\n' \
+        "${AORUS_CC_PLUGIN_SHA256}" \
+        "/tmp/aorus-plugin/cc-plugin-aorus" | sha256sum -c - && \
+    printf '%s  %s\n' \
+        "${AORUS_CC_PLUGIN_MANIFEST_SHA256}" \
+        "/tmp/aorus-plugin/manifest.toml" | sha256sum -c - && \
+    mkdir -p /etc/coolercontrol/plugins/cc-plugin-aorus && \
+    install -m755 \
+        /tmp/aorus-plugin/cc-plugin-aorus \
+        /etc/coolercontrol/plugins/cc-plugin-aorus/cc-plugin-aorus && \
+    install -m644 \
+        /tmp/aorus-plugin/manifest.toml \
+        /etc/coolercontrol/plugins/cc-plugin-aorus/manifest.toml && \
+    rm -rf /tmp/aorus-plugin && \
     dnf5 -y swap \
         --repo terra \
             switcheroo-control cardwire && \
@@ -306,6 +334,8 @@ RUN --mount=type=cache,dst=/var/cache \
     mkdir -p /etc/xdg/autostart && \
     sed -i~ -E 's/=.\$\(command -v (nft|ip6?tables-legacy).*/=/g' /usr/lib/waydroid/data/scripts/waydroid-net.sh && \
     sed -i 's/ --xdg-runtime=\\"${XDG_RUNTIME_DIR}\\"//g' /usr/bin/btrfs-assistant-launcher && \
+    test -f /usr/lib/systemd/system/coolercontrold.service && \
+    systemctl enable coolercontrold.service && \
     /ctx/cleanup
 
 # Install Steam & Lutris, plus supporting packages
@@ -551,7 +581,8 @@ RUN --mount=type=cache,dst=/var/cache \
         ublue-os/staging \
         ublue-os/packages \
         ycollet/audinux \
-        che/nerd-fonts; \
+        che/nerd-fonts \
+        codifryed/CoolerControl; \
     do \
         dnf5 -y copr disable $copr; \
     done && unset -v copr && \
